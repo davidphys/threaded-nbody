@@ -14,16 +14,11 @@ public:
 };*/
 
 
-void QuadNode::calculateForces(PointMass *arg, const double& G)
+void QuadNode::calculateForces(PointMass *arg, const double& G) const
 {
 
 	if(subnodes[0][0]!=NULL)
 	{
-		/*
-
-		glm::dvec2 pt = masspos/mass;
-		register double diffw = tl.x - br.x; //(tl.x-br.x)*(tl.x-br.x)
-		if (diffw >= (abs(pt.x-arg->position.x)+abs(pt.y-arg->position.y))*0.9) */
 		glm::dvec2 pt=masspos/mass; 
 		glm::dvec2 diff=pt-arg->position;
 		double d=diff.x*diff.x+diff.y*diff.y;
@@ -112,6 +107,7 @@ void QuadNode::addPointMass(PointMass *arg)
 
 typedef std::unordered_map<std::pair<int,int>,std::vector<PointMass*>,boost::hash<std::pair<int,int>>> GridMapType ;
 typedef std::unordered_map<std::pair<int,int>,std::vector<PointMass*>,boost::hash<std::pair<int,int>>>::iterator GridMapIterator ;
+typedef std::unordered_map<std::pair<int,int>,std::vector<PointMass*>,boost::hash<std::pair<int,int>>>::const_iterator ConstGridMapIterator ;
 
 //	std::unordered_map<std::pair<int,int>,std::vector<PointMass*>> *gridmap;
 //	double multiplier;
@@ -147,14 +143,14 @@ void GridHandler::addPointMass(PointMass *arg) {
 		f->second.push_back(arg);
 	}
 }
-void GridHandler::calculateForces(PointMass *arg, const double& K, const double& damping) {
+void GridHandler::calculateForces(PointMass *arg, const double& K, const double& damping) const{
 	int x0=(int)floor(arg->position.x*multiplier);
 	int y0=(int)floor(arg->position.y*multiplier);
 
 	//iterate over the 9x9 grid around the argument's position
 	for(int x=-1;x<=1;x++){
 		for(int y=-1;y<=1;y++){
-			GridMapIterator f=gridmap->find(std::make_pair(x0+x,y0+y));
+			auto f=gridmap->find(std::make_pair(x0+x,y0+y));
 			if(f!=gridmap->end()){
 				//if there's a vector, iterate over it and calculate each resulting force.
 				for(size_t i=0; i<f->second.size(); i++) {
@@ -194,7 +190,7 @@ G(G),collK(collision_spring_constant),collDampening(collision_dampening),phytime
 PhysicsHandler::~PhysicsHandler()
 {
 }
-glm::dvec2 PhysicsHandler::getMomentum()
+glm::dvec2 PhysicsHandler::getMomentum() const
 {
 	/*glm::dvec2 ms(0,0);
 	for(size_t n=0;n<masses.size();n++)
@@ -204,7 +200,7 @@ glm::dvec2 PhysicsHandler::getMomentum()
 	return ms;*/
 	return recursiveSumMomentum(0,masses.size(),50);
 }
-glm::dvec2 PhysicsHandler::getMassPosSum()
+glm::dvec2 PhysicsHandler::getMassPosSum() const
 {
 	/*glm::dvec2 ms(0,0);
 	for(size_t n=0;n<masses.size();n++)
@@ -214,15 +210,15 @@ glm::dvec2 PhysicsHandler::getMassPosSum()
 	return ms;*/
 	return recursiveSumPositionMass(0,masses.size(),50);
 }
-double PhysicsHandler::getMass() {
+double PhysicsHandler::getMass() const{
 	return recursiveSumMass(0,masses.size(),50);
 }
-double PhysicsHandler::getAngularMomentum(){
+double PhysicsHandler::getAngularMomentum() const{
 	return recursiveAngularMomentum(0,masses.size(),50);
 }
 
 
-double PhysicsHandler::recursiveSumMass(int from, int to, int minimum){
+double PhysicsHandler::recursiveSumMass(int from, int to, int minimum) const{
     if(from>to)
         return 0;
 	if(to-from<minimum){
@@ -235,7 +231,7 @@ double PhysicsHandler::recursiveSumMass(int from, int to, int minimum){
         return recursiveSumMass(from,(from+to)/2,minimum)+recursiveSumMass((from+to)/2,to,minimum);
 	}
 }
-glm::dvec2 PhysicsHandler::recursiveSumMomentum(int from, int to, int minimum){
+glm::dvec2 PhysicsHandler::recursiveSumMomentum(int from, int to, int minimum) const{
     if(from>to)
         return glm::dvec2(0,0);
 	if(to-from<=minimum){
@@ -248,7 +244,7 @@ glm::dvec2 PhysicsHandler::recursiveSumMomentum(int from, int to, int minimum){
         return recursiveSumMomentum(from,(from+to)/2,minimum)+recursiveSumMomentum((from+to)/2,to,minimum);
 	}
 }
-glm::dvec2 PhysicsHandler::recursiveSumPositionMass(int from, int to, int minimum){
+glm::dvec2 PhysicsHandler::recursiveSumPositionMass(int from, int to, int minimum) const{
     if(from>to)
         return glm::dvec2(0,0);
 	if(to-from<minimum){
@@ -261,7 +257,7 @@ glm::dvec2 PhysicsHandler::recursiveSumPositionMass(int from, int to, int minimu
         return recursiveSumPositionMass(from,(from+to)/2,minimum)+recursiveSumPositionMass((from+to)/2,to,minimum);
 	}
 }
-double PhysicsHandler::recursiveAngularMomentum(int from, int to, int minimum){
+double PhysicsHandler::recursiveAngularMomentum(int from, int to, int minimum) const{
     if(from>to)
         return 0;
 	if(to-from<minimum){
@@ -374,6 +370,7 @@ void PhysicsHandler::calcGravForces()
 	}
 	phytime.quadDelete=timer.tick();
 }
+
 void PhysicsHandler::update(double timestep)
 {
 
@@ -381,13 +378,6 @@ void PhysicsHandler::update(double timestep)
 	for(size_t n=0;n<masses.size();n++)
 	{
 		PointMass &m=masses.at(n);
-	    /*if(n==0){
-	        std::cout<<"Position: "<<m.position.x<<", "<<m.position.y<<std::endl;
-	        std::cout<<"Velocity: "<<m.velocity.x<<", "<<m.velocity.y<<std::endl;
-	        std::cout<<"Acceleration: "<<m.force.x<<", "<<m.force.y<<std::endl;
-	        std::cout<<"radius: "<<m.radius<<std::endl;
-	        std::cout<<"mass: "<<m.mass<<std::endl<<std::endl;
-	    }*/
 		m.position+=(m.velocity+.5*timestep*(m.springforce+m.gravforce)/m.mass)*timestep;
 		m.velocity+=timestep*(m.springforce+m.gravforce)/m.mass;
 	}
@@ -401,10 +391,9 @@ void PhysicsHandler::update(double timestep)
 
 	}
 	phytime.timestepping=timer.tick();
-
 }
 
 
 
 
-glm::dvec2 PhysicsHandler::getMassPos(int num){return masses.at(num).position;}
+glm::dvec2 PhysicsHandler::getMassPos(int num) const{return masses.at(num).position;}

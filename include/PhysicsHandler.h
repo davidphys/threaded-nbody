@@ -51,7 +51,7 @@ public:
 	void addPointMass(PointMass *arg);
 	/**Uses Barnes-Hut calculation to approximate the gravitational (and spring) forces on a passed in particle, according to the
 	passed in physical constants (see PhysicsHandler's constructor)*/
-	void calculateForces(PointMass *arg, const double& G);
+	void calculateForces(PointMass *arg, const double& G) const;
 };
 
 /** GridHandler
@@ -70,7 +70,7 @@ public:
 	~GridHandler();
 	void clearPoints();
 	void addPointMass(PointMass *arg);
-	void calculateForces(PointMass *arg, const double& K, const double& damping);
+	void calculateForces(PointMass *arg, const double& K, const double& damping) const;
 };
 
 
@@ -111,17 +111,17 @@ public:
 	~PhysicsHandler();
 
 	///Returns the sum of momentum (mass1*vel1+...) of the entire system.
-	glm::dvec2 getMomentum();
+	glm::dvec2 getMomentum() const;
 	///Returns the sum of momentum (mass1*vel1+...) of the entire system.
-	double getMass();
-	double getAngularMomentum();
+	double getMass() const;
+	double getAngularMomentum() const;
 
-	glm::dvec2 getMassPosSum();
+	glm::dvec2 getMassPosSum() const;
 	void zeroMomentumAndCM();
-	double recursiveSumMass(int from, int to, int minimum);
-    glm::dvec2 recursiveSumMomentum(int from, int to, int minimum);
-    glm::dvec2 recursiveSumPositionMass(int from, int to, int minimum);
-	double recursiveAngularMomentum(int from, int to, int minimum);
+	double recursiveSumMass(int from, int to, int minimum) const;
+    glm::dvec2 recursiveSumMomentum(int from, int to, int minimum) const;
+    glm::dvec2 recursiveSumPositionMass(int from, int to, int minimum) const;
+	double recursiveAngularMomentum(int from, int to, int minimum) const;
 
     ///Adds a mass to the system. The spring force only acts inside the particle's radius.
 	int addMass(glm::dvec2 pos, double mass, double radius, glm::dvec2 velocity);
@@ -134,7 +134,7 @@ public:
 	void update(double timestep);
 
 	///gets the position of a particular mass
-	glm::dvec2 getMassPos(int num);
+	glm::dvec2 getMassPos(int num) const;
 };
 
 

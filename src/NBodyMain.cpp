@@ -125,10 +125,13 @@ initDrawStyleCCircles();
     {
 	//phy.zeroMomentumAndCM();
     //
-		for(int a=0;a<1;a++) {
+		for(int a=0;a<12;a++) {
 			phy.calcGravForces();
 			phy.calcSpringForces();
 			phy.update(0.03);
+            createTotal += phy.getTiming().hashCreate + phy.getTiming().quadCreate;
+            phyTotal += phy.getTiming().hashPhy + phy.getTiming().quadPhy;
+            deleteTotal += phy.getTiming().hashDelete + phy.getTiming().quadDelete;
 		}
 /*
 		
@@ -157,9 +160,6 @@ initDrawStyleCCircles();
 		std::cout<<std::endl;*/
 
 
-		createTotal += phy.getTiming().hashCreate + phy.getTiming().quadCreate;
-		phyTotal += phy.getTiming().hashPhy + phy.getTiming().quadPhy;
-		deleteTotal += phy.getTiming().hashDelete + phy.getTiming().quadDelete;
 		n++;
         /*
 
@@ -169,6 +169,7 @@ initDrawStyleCCircles();
 
 		std::cout << "frame: " << n << std::endl;
         */
+		std::cout<<"Timestep:"<<(createTotal+phyTotal+deleteTotal)/n<<std::endl;
 
 
         //phy.drawToSurface(screen,1280,720,glm::dmat3(5,0,0,0,5,0,640,360,1));
@@ -179,10 +180,6 @@ initDrawStyleCCircles();
 		SDL_RenderClear(gRenderer);
         double transx=cam.getX();
         double transy=cam.getY();
-        cout<<"x: "<<transx<<"\t\t";
-        cout<<"y: "<<transy<<"\t\t";
-        cout<<"scale: "<<cam.getScale()<<endl;
-        //SDL_RenderSetScale(gRenderer,double(scwidth)/cam.getScale(),double(scwidth)/cam.getScale());
 
         setPointSize((int)(cam.getScale()*10));
 		for(int i=0;i<phy.masses.size();i++) {
