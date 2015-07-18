@@ -4,9 +4,306 @@
 #include "QuadNode.h"
 
 
+/******************************************************************************* 
+ *                           PhysicsThreadDispatcher                           *
+ *******************************************************************************/
+
+
+///////////////private
+void PhysicsThreadDispatcher::fillGrid(){
+    if(grid!=nullptr){
+        std::cerr<<"Error: fillGrid called when PhysicsThreadDispatcher grid already filled"<<std::endl;
+        return;
+    }
+
+    grid=new GridHandler(0.6/masses[0].radius,masses.size());
+    for(size_t n=0;n<masses.size();n++)
+        grid->addPointMass(&masses.at(n));
+}
+void PhysicsThreadDispatcher::fillQuad(){
+    if(quad!=nullptr){
+        std::cerr<<"Error: fillQuad called when PhysicsThreadDispatcher quad already filled"<<std::endl;
+        return;
+    }
+
+	double left=masses.at(0).position.x;
+	double right=masses.at(0).position.x;
+	double top=masses.at(0).position.y;
+	double bottom=masses.at(0).position.y;
+	for(size_t n=0;n<masses.size();n++)
+	{
+		if(masses.at(n).position.x<left)
+			left=masses.at(n).position.x;
+
+		if(masses.at(n).position.y>top)
+			top=masses.at(n).position.y;
+
+		if(masses.at(n).position.x>right)
+			right=masses.at(n).position.x;
+
+		if(masses.at(n).position.y<bottom)
+			bottom=masses.at(n).position.y;
+	}
+
+    quad=new QuadNode(glm::dvec2(left,top),glm::dvec2(right,bottom));
+
+    for(size_t n=0;n<masses.size();n++)
+        quad->addPointMass(&masses.at(n));
+}
+void PhysicsThreadDispatcher::destructQuadGrid(){
+    if(grid!=nullptr)
+        delete grid;
+    if(quad!=nullptr)
+        delete quad;
+}
+void PhysicsThreadDispatcher::destructThreads(){
+    for(int i=0;i<threads.size();i++){
+        if(threads[i].thread!=nullptr){
+            int ret=0;
+            SDL_WaitThread(threads[i].thread,&ret);
+            threads[i].thread=nullptr;
+        }
+    }
+    if(presentlock!=nullptr)
+        SDL_DestroySemaphore(presentlock);
+    if(threadsrunning!=nullptr)
+        SDL_DestroySemaphore(threadsrunning);
+}
+///////////////public
+PhysicsThreadDispatcher::PhysicsThreadDispatcher(const std::vector<PointMass>& masses,int nthreads)
+    : present(),presentlock(nullptr), threads(), threadsrunning(nullptr), quad(nullptr), grid(nullptr),
+    masses(masses), nthreads(nthreads) { 
+    if(masses.size()==0)
+        std::cerr<<"Error: PhysicsThreadDispatcher created with an empty masses array"<<std::endl;
+}
+PhysicsThreadDispatcher::~PhysicsThreadDispatcher() {
+}
+
+void PhysicsThreadDispatcher::dispatch(){
+    if(running()){
+        std::cerr<<"Error: PhysicsThreadDispatcher::dispatch called when already dispatched"<<std::endl;
+        return;
+    }
+
+
+}
+
+
+TimeType PhysicsThreadDispatcher::getPresent(){
+    if(presentlock!=nullptr)
+        SDL_SemWait(presentlock);
+    TimeType t2=present;
+    if(presentlock!=nullptr)
+        SDL_SemPost(presentlock);
+    return t2;
+}
+void PhysicsThreadDispatcher::setPresent(TimeType t){
+    if(presentlock!=nullptr)
+        SDL_SemWait(presentlock);
+    present=t;
+    if(presentlock!=nullptr)
+        SDL_SemPost(presentlock);
+}
+
+
+bool PhysicsThreadDispatcher::running(){
+    return (threadsrunning!=nullptr)&&(SDL_SemValue(threadsrunning)>0);
+}
+
+
+//The following two functions are only safe if "running" returns false.
+std::vector<double> PhysicsThreadDispatcher::getTiming(){
+    std::vector<double> times;
+    for(auto& t:threads)
+        times.push_back((t.timeended-t.timestarted).count());
+    return times;
+}
+const std::vector<PointMass>& PhysicsThreadDispatcher::getMasses(){return masses;}
+
+
+/******************************************************************************* 
+ *                           PhysicsHandlerThreaded                            *
+ *******************************************************************************/
+
+//////////private:
+
+glm::dvec2 PhysicsHandlerThreaded::getMassPosSum() const {
+	return recursiveSumPositionMass(0,masses.size(),50);
+}
+double PhysicsHandlerThreaded::recursiveSumMass(int from, int to, int minimum) const{
+    if(from>to)
+        return 0;
+	if(to-from<minimum){
+        double sum=0;
+        for(int i=from;i<to;i++){
+            sum+=masses.at(i).mass;
+        }
+        return sum;
+	} else {
+        return recursiveSumMass(from,(from+to)/2,minimum)+recursiveSumMass((from+to)/2,to,minimum);
+	}
+}
+glm::dvec2 PhysicsHandlerThreaded::recursiveSumMomentum(int from, int to, int minimum) const{
+    if(from>to)
+        return glm::dvec2(0,0);
+	if(to-from<=minimum){
+        glm::dvec2 sum=glm::dvec2(0,0);
+        for(int i=from;i<to;i++){
+            sum+=masses.at(i).velocity*masses.at(i).mass;
+        }
+        return sum;
+	} else {
+        return recursiveSumMomentum(from,(from+to)/2,minimum)+recursiveSumMomentum((from+to)/2,to,minimum);
+	}
+}
+glm::dvec2 PhysicsHandlerThreaded::recursiveSumPositionMass(int from, int to, int minimum) const{
+    if(from>to)
+        return glm::dvec2(0,0);
+	if(to-from<minimum){
+        glm::dvec2 sum=glm::dvec2(0,0);
+        for(int i=from;i<to;i++){
+            sum+=masses.at(i).position*masses.at(i).mass;
+        }
+        return sum;
+	} else {
+        return recursiveSumPositionMass(from,(from+to)/2,minimum)+recursiveSumPositionMass((from+to)/2,to,minimum);
+	}
+}
+double PhysicsHandlerThreaded::recursiveAngularMomentum(int from, int to, int minimum) const{
+    if(from>to)
+        return 0;
+	if(to-from<minimum){
+		double sum=0;
+        for(int i=from;i<to;i++){
+			//m*(x*vy-y*vx)
+			const PointMass &p=masses.at(i);
+            sum+=masses.at(i).mass*(p.position.x*p.velocity.y-p.velocity.x*p.position.y);
+        }
+        return sum;
+	} else {
+        return recursiveAngularMomentum(from,(from+to)/2,minimum)+recursiveAngularMomentum((from+to)/2,to,minimum);
+	}
+}
+
+//////////public:
+
+PhysicsHandlerThreaded::PhysicsHandlerThreaded(double G, double collision_spring_constant,double collision_dampening) :
+    G(G),collK(collision_spring_constant),collDampening(collision_dampening),
+    phytime(),timer(), masses(),phythreadhandler(nullptr)
+{}
+PhysicsHandlerThreaded::~PhysicsHandlerThreaded(){
+    if(phythreadhandler!=nullptr)
+        delete phythreadhandler;
+}
+
+
+void PhysicsHandlerThreaded::update(double timestep){
+    //Update the multithreaded physics updater's low-resolution but thread-safe clock
+    if(phythreadhandler!=nullptr)
+        phythreadhandler->setPresent(easytime::getPresent());
+
+    //Do nothing if the computation threads are running
+    if(updating())
+        return;
+    
+    //If the computation has finished but the thread handler has not been cleaned up yet,
+    //clean up/finish the computation.
+    if(phythreadhandler!=nullptr){
+
+        masses=phythreadhandler->getMasses();
+        std::vector<double> threadtimes=phythreadhandler->getTiming();
 
 
 
+        delete phythreadhandler;
+        phythreadhandler=nullptr;
+        phytime.realTime=timer.tick(); //timer shouldn't have ticked since the update called when phythreadhandler was created.
+        
+
+        //Integration step [done on the single thread] 
+        timer.tick();
+        for(size_t n=0;n<masses.size();n++)
+        {
+            PointMass &m=masses.at(n);
+            m.position+=(m.velocity+.5*timestep*(m.springforce+m.gravforce)/m.mass)*timestep;
+            m.velocity+=timestep*(m.springforce+m.gravforce)/m.mass;
+        }
+        int dist=5000;
+
+        for(size_t n=0;n<masses.size();n++){
+            PointMass &m=masses.at(n);
+            if(m.position.x*m.position.x+m.position.y*m.position.y>dist*dist)
+            {    masses.erase(masses.begin()+n);
+            n--;}
+
+        }
+        phytime.timestepping=timer.tick();
+    } else { //In this case, we need to start a new computation.
+        phythreadhandler=new PhysicsThreadDispatcher(masses,7);
+        timer.tick();
+        phythreadhandler->dispatch();
+    }
+    
+}
+bool PhysicsHandlerThreaded::updating(){
+    return (phythreadhandler!=nullptr)&&(phythreadhandler->running());
+}
+
+
+void PhysicsHandlerThreaded::zeroMomentumAndCM() {
+    double mass=recursiveSumMass(0,masses.size(),50);
+    glm::dvec2 posdiff=recursiveSumPositionMass(0,masses.size(),50)*1.0/mass;
+    glm::dvec2 momentumdiff=recursiveSumMomentum(0,masses.size(),50)*1.0/mass;
+	for(size_t n=0;n<masses.size();n++)
+	{
+		masses.at(n).velocity-=momentumdiff;
+		masses.at(n).position-=posdiff;
+	}
+}
+void PhysicsHandlerThreaded::addMass(glm::dvec2 pos, double mass, double radius, glm::dvec2 velocity) {
+	PointMass newmass;
+	newmass.position=pos;
+	newmass.velocity=velocity;
+	newmass.gravforce=glm::dvec2(0,0);
+	newmass.springforce=glm::dvec2(0,0);
+	newmass.mass=mass;
+	newmass.radius=radius;
+	masses.push_back(newmass);
+}
+
+
+PhysicsHandlerThreadedTiming PhysicsHandlerThreaded::getTiming() const{
+	return phytime;
+}
+
+
+glm::dvec2 PhysicsHandlerThreaded::getMomentum() const
+{
+	return recursiveSumMomentum(0,masses.size(),50);
+}
+double PhysicsHandlerThreaded::getMass() const{
+	return recursiveSumMass(0,masses.size(),50);
+}
+double PhysicsHandlerThreaded::getAngularMomentum() const{
+	return recursiveAngularMomentum(0,masses.size(),50);
+}
+
+
+const PointMass& PhysicsHandlerThreaded::getPointMass(int i) const {
+    return masses.at(i);
+}
+int PhysicsHandlerThreaded::numParticles() const {
+    return masses.size();
+}
+
+
+
+
+
+//single threaded
+/******************************************************************************* 
+ *                                 PhysicsHandler                              *
+ *******************************************************************************/
 
 
 

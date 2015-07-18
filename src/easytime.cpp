@@ -3,6 +3,12 @@
 typedef std::chrono::time_point<std::chrono::system_clock> TimeType;
 typedef std::chrono::duration<double> DurationType;
 
+namespace easytime{
+    TimeType getPresent(){
+        return std::chrono::system_clock::now();
+    }
+}
+
 EasyTimer::EasyTimer(){
 	timer=std::chrono::system_clock::now();
 }

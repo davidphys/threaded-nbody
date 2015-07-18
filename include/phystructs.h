@@ -7,7 +7,6 @@ dumb structure that stores the data of a gravitating particle.
 */
 struct PointMass
 {
-
 	glm::dvec2 position;
 	glm::dvec2 velocity;
 	glm::dvec2 gravforce;
@@ -17,6 +16,15 @@ struct PointMass
 };
 
 
+struct PhysicsHandlerThreadedTiming {
+    double maxThreadTime;
+    double minThreadTime;
+    double realTime;
+	double timestepping;
+	PhysicsHandlerThreadedTiming() : 
+		maxThreadTime(0),minThreadTime(0),realTime(0),timestepping(0){
+	}
+};
 struct PhysicsHandlerTiming {
 	double quadCreate;
 	double quadPhy;
