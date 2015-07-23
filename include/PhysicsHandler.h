@@ -19,9 +19,12 @@ struct PhysicsThreadData{
     int particleEndRange;
 };
 
-int PhysicsThreadFunction(void *data);
+int physicsThreadFunction(void* data);
 //This class should handle all of the needed multithreading.
 class PhysicsThreadDispatcher{
+    double G;
+    double collK;
+    double collDampening;
     TimeType present; //access using getPresent(). Set using setPresent().
     SDL_sem *presentlock;
 
@@ -41,7 +44,7 @@ class PhysicsThreadDispatcher{
     void fillQuad();
 
     public:
-    PhysicsThreadDispatcher(const std::vector<PointMass>& masses,int nthreads);
+    PhysicsThreadDispatcher(double G, double collK, double collDampening,const std::vector<PointMass>& masses,int nthreads);
     ~PhysicsThreadDispatcher();
 
     void dispatch();
@@ -55,7 +58,7 @@ class PhysicsThreadDispatcher{
     std::vector<double> getTiming();
     const std::vector<PointMass>& getMasses();
 
-    friend int PhysicsThreadFunction (void *data);
+    friend int physicsThreadFunction(void *data);
 };
 
 class PhysicsHandlerThreaded{

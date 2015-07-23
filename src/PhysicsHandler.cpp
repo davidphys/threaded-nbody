@@ -7,7 +7,25 @@
 /******************************************************************************* 
  *                           PhysicsThreadDispatcher                           *
  *******************************************************************************/
+///////////////Friend function
 
+int physicsThreadFunction(void *data) {
+    PhysicsThreadData *thread=(PhysicsThreadData *)data;
+    PhysicsThreadDispatcher *parent=thread->parent;
+
+    for(size_t i=thread->particleStartRange;i<thread->particleEndRange;i++){
+        PointMass *p=&(parent->masses.at(i));
+        p->gravforce=glm::dvec2(0,0);
+        parent->quad->calculateForces(p,parent->G);
+        p->springforce=glm::dvec2(0,0);
+        parent->grid->calculateForces(p,parent->collK,parent->collDampening);
+    }
+
+
+    thread->timeended=parent->getPresent();
+    SDL_SemWait(parent->threadsrunning);
+    return 0;
+}
 
 ///////////////private
 void PhysicsThreadDispatcher::fillGrid(){
@@ -53,8 +71,10 @@ void PhysicsThreadDispatcher::fillQuad(){
 void PhysicsThreadDispatcher::destructQuadGrid(){
     if(grid!=nullptr)
         delete grid;
+    grid=nullptr;
     if(quad!=nullptr)
         delete quad;
+    quad=nullptr;
 }
 void PhysicsThreadDispatcher::destructThreads(){
     for(int i=0;i<threads.size();i++){
@@ -64,19 +84,25 @@ void PhysicsThreadDispatcher::destructThreads(){
             threads[i].thread=nullptr;
         }
     }
+    threads=std::vector<PhysicsThreadData>();
+
     if(presentlock!=nullptr)
         SDL_DestroySemaphore(presentlock);
+    presentlock=nullptr;
     if(threadsrunning!=nullptr)
         SDL_DestroySemaphore(threadsrunning);
+    threadsrunning=nullptr;
 }
 ///////////////public
-PhysicsThreadDispatcher::PhysicsThreadDispatcher(const std::vector<PointMass>& masses,int nthreads)
-    : present(),presentlock(nullptr), threads(), threadsrunning(nullptr), quad(nullptr), grid(nullptr),
+PhysicsThreadDispatcher::PhysicsThreadDispatcher(double G, double collK, double collDampening,const std::vector<PointMass>& masses,int nthreads)
+    : G(G),collK(collK),collDampening(collDampening), present(),presentlock(nullptr), threads(), threadsrunning(nullptr), quad(nullptr), grid(nullptr),
     masses(masses), nthreads(nthreads) { 
     if(masses.size()==0)
         std::cerr<<"Error: PhysicsThreadDispatcher created with an empty masses array"<<std::endl;
 }
 PhysicsThreadDispatcher::~PhysicsThreadDispatcher() {
+    destructThreads();
+    destructQuadGrid();
 }
 
 void PhysicsThreadDispatcher::dispatch(){
@@ -84,8 +110,30 @@ void PhysicsThreadDispatcher::dispatch(){
         std::cerr<<"Error: PhysicsThreadDispatcher::dispatch called when already dispatched"<<std::endl;
         return;
     }
+    
+    //Safely ensure no threads are running and all the semaphores are uninitialized.
+    destructThreads();
+    destructQuadGrid();
 
+    //Construct the needed data structures;
+    fillGrid();
+    fillQuad();
 
+    presentlock=SDL_CreateSemaphore(1);
+    threadsrunning=SDL_CreateSemaphore(nthreads);
+    double stepsize=double(masses.size())/nthreads;
+    for(int i=0;i<nthreads;i++){
+        PhysicsThreadData newthread;
+        newthread.parent=this;
+        newthread.particleStartRange=int(stepsize*i);
+        newthread.particleEndRange=int(stepsize*(i+1));
+        threads.push_back(newthread);
+    }
+
+    for(int i=0;i<nthreads;i++){
+        threads[i].timestarted=getPresent();
+        threads[i].thread=SDL_CreateThread(physicsThreadFunction,"GravityWorker",(void *)(&(threads[i])));
+    }
 }
 
 
@@ -115,7 +163,9 @@ bool PhysicsThreadDispatcher::running(){
 std::vector<double> PhysicsThreadDispatcher::getTiming(){
     std::vector<double> times;
     for(auto& t:threads)
-        times.push_back((t.timeended-t.timestarted).count());
+    {
+        times.push_back((DurationType(t.timeended-t.timestarted)).count());
+    }
     return times;
 }
 const std::vector<PointMass>& PhysicsThreadDispatcher::getMasses(){return masses;}
@@ -210,12 +260,23 @@ void PhysicsHandlerThreaded::update(double timestep){
     //clean up/finish the computation.
     if(phythreadhandler!=nullptr){
 
+        std::cout<<"Finish Computation timing: "<<std::endl;
+        EasyTimer timer2;//timer2
+        timer2.tick();//timer2
+
         masses=phythreadhandler->getMasses();
         std::vector<double> threadtimes=phythreadhandler->getTiming();
+
+        double timingsum=0;
+        for(size_t i=0;i<threadtimes.size();i++){
+            timingsum+=threadtimes[i];
+        }
+        std::cout<<"\tTotal Thread time: "<<timingsum<<std::endl;
 
 
 
         delete phythreadhandler;
+        std::cout<<"\tThread Dispatcher Deletion: "<<timer2.tick()<<std::endl; //timer2
         phythreadhandler=nullptr;
         phytime.realTime=timer.tick(); //timer shouldn't have ticked since the update called when phythreadhandler was created.
         
@@ -238,9 +299,11 @@ void PhysicsHandlerThreaded::update(double timestep){
 
         }
         phytime.timestepping=timer.tick();
+        std::cout<<"\tparticle integration: "<<timer2.tick()<<std::endl; //timer2
     } else { //In this case, we need to start a new computation.
-        phythreadhandler=new PhysicsThreadDispatcher(masses,7);
+        phythreadhandler=new PhysicsThreadDispatcher(G, collK, collDampening,masses,8);
         timer.tick();
+        phythreadhandler->setPresent(easytime::getPresent());
         phythreadhandler->dispatch();
     }
     

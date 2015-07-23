@@ -20,7 +20,7 @@ $(PROJECT): $(OBJSR)
 	$(CC) $(CFLAGS) $(RELEASEFLAGS) -I $(INCLUDE) -o $(PROJECT) $^ $(LIBS)
 
 $(OBJSR): obj/%.o : src/%.cpp
-	$(CC) $(CFLAGS) -I $(INCLUDE) -c $< $(LIBS) -o $@
+	$(CC) $(CFLAGS) $(RELEASEFLAGS) -I $(INCLUDE) -c $< $(LIBS) -o $@
 
 run: $(PROJECT)
 	./$(PROJECT)
