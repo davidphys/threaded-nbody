@@ -9,6 +9,20 @@
  *******************************************************************************/
 ///////////////Friend function
 
+int quadGridFillerThreadFunction(void* data) {
+    QuadGridFillerThreadData *thread=(QuadGridFillerThreadData *)data;
+    PhysicsThreadDispatcher *parent=thread->parent;
+
+    for(size_t i=0;i<parent->masses.size();i++){
+        PointMass *p=&(parent->masses.at(i));
+
+        parent->quad->addPointMass(p);
+        parent->grid->addPointMass(p);
+    }
+    SDL_SemWait(parent->threadsrunning);
+    return 0;
+}
+
 int physicsThreadFunction(void *data) {
     PhysicsThreadData *thread=(PhysicsThreadData *)data;
     PhysicsThreadDispatcher *parent=thread->parent;
@@ -34,9 +48,13 @@ void PhysicsThreadDispatcher::fillGrid(){
         return;
     }
 
-    grid=new GridHandler(0.6/masses[0].radius,masses.size());
-    for(size_t n=0;n<masses.size();n++)
-        grid->addPointMass(&masses.at(n));
+    double maxrad=0.0;
+    for(int i=0;i<masses.size();i++)
+        if(masses[i].radius<maxrad)
+            maxrad=masses[i].radius;
+    grid=new GridHandler(0.6/maxrad,masses.size());
+    //for(size_t n=0;n<masses.size();n++)
+        //grid->addPointMass(&masses.at(n));
 }
 void PhysicsThreadDispatcher::fillQuad(){
     if(quad!=nullptr){
@@ -65,8 +83,8 @@ void PhysicsThreadDispatcher::fillQuad(){
 
     quad=new QuadNode(glm::dvec2(left,top),glm::dvec2(right,bottom));
 
-    for(size_t n=0;n<masses.size();n++)
-        quad->addPointMass(&masses.at(n));
+    //for(size_t n=0;n<masses.size();n++)
+        //quad->addPointMass(&masses.at(n));
 }
 void PhysicsThreadDispatcher::destructQuadGrid(){
     if(grid!=nullptr)
@@ -84,6 +102,13 @@ void PhysicsThreadDispatcher::destructThreads(){
             threads[i].thread=nullptr;
         }
     }
+
+    if(quadgridthread.thread!=nullptr){
+        int ret=0;
+        SDL_WaitThread(quadgridthread.thread,&ret);
+        quadgridthread.thread=nullptr;
+    }
+
     threads=std::vector<PhysicsThreadData>();
 
     if(presentlock!=nullptr)
@@ -97,6 +122,8 @@ void PhysicsThreadDispatcher::destructThreads(){
 PhysicsThreadDispatcher::PhysicsThreadDispatcher(double G, double collK, double collDampening,const std::vector<PointMass>& masses,int nthreads)
     : G(G),collK(collK),collDampening(collDampening), present(),presentlock(nullptr), threads(), threadsrunning(nullptr), quad(nullptr), grid(nullptr),
     masses(masses), nthreads(nthreads) { 
+    quadgridthread.thread=nullptr;
+    quadgridthread.parent=nullptr;
     if(masses.size()==0)
         std::cerr<<"Error: PhysicsThreadDispatcher created with an empty masses array"<<std::endl;
 }
@@ -105,7 +132,25 @@ PhysicsThreadDispatcher::~PhysicsThreadDispatcher() {
     destructQuadGrid();
 }
 
-void PhysicsThreadDispatcher::dispatch(){
+int PhysicsThreadDispatcher::getMode(){
+    /* Mode 0: quadgrids need filling.
+     * Mode 1: quadgrids currently updating.
+     * Mode 2: physics needs running.
+     * Mode 3: physics currently updating.
+     * Mode 4: physics done.
+     * */
+    if(grid==nullptr || quad==nullptr)
+        return 0;
+    if(running() && (threads.size()==0 || threads.at(0).thread==nullptr))
+        return 1;
+    if(threads.size()==0 || threads.at(0).thread==nullptr)
+        return 2;
+    if(running())
+        return 3;
+    return 4;
+}
+
+void PhysicsThreadDispatcher::dispatchQuadGrid(){
     if(running()){
         std::cerr<<"Error: PhysicsThreadDispatcher::dispatch called when already dispatched"<<std::endl;
         return;
@@ -115,9 +160,22 @@ void PhysicsThreadDispatcher::dispatch(){
     destructThreads();
     destructQuadGrid();
 
-    //Construct the needed data structures;
     fillGrid();
     fillQuad();
+
+    threadsrunning=SDL_CreateSemaphore(1);
+
+    quadgridthread.parent=this;
+    quadgridthread.thread=SDL_CreateThread(quadGridFillerThreadFunction,"QuadGridWorker",((void*)(& quadgridthread)));
+}
+void PhysicsThreadDispatcher::dispatch(){
+    if(running()){
+        std::cerr<<"Error: PhysicsThreadDispatcher::dispatch called when already dispatched"<<std::endl;
+        return;
+    }
+    
+    //Safely ensure no threads are running and all the semaphores are uninitialized.
+    destructThreads();
 
     presentlock=SDL_CreateSemaphore(1);
     threadsrunning=SDL_CreateSemaphore(nthreads);
@@ -258,7 +316,11 @@ void PhysicsHandlerThreaded::update(double timestep){
     
     //If the computation has finished but the thread handler has not been cleaned up yet,
     //clean up/finish the computation.
-    if(phythreadhandler!=nullptr){
+    if(phythreadhandler!=nullptr && phythreadhandler->getMode()==2){
+        timer.tick();
+        phythreadhandler->setPresent(easytime::getPresent());
+        phythreadhandler->dispatch();
+    } else if(phythreadhandler!=nullptr){
 
         std::cout<<"Finish Computation timing: "<<std::endl;
         EasyTimer timer2;//timer2
@@ -289,7 +351,7 @@ void PhysicsHandlerThreaded::update(double timestep){
             m.position+=(m.velocity+.5*timestep*(m.springforce+m.gravforce)/m.mass)*timestep;
             m.velocity+=timestep*(m.springforce+m.gravforce)/m.mass;
         }
-        int dist=5000;
+        int dist=10000;
 
         for(size_t n=0;n<masses.size();n++){
             PointMass &m=masses.at(n);
@@ -301,10 +363,11 @@ void PhysicsHandlerThreaded::update(double timestep){
         phytime.timestepping=timer.tick();
         std::cout<<"\tparticle integration: "<<timer2.tick()<<std::endl; //timer2
     } else { //In this case, we need to start a new computation.
+        std::cout<<"Dispatching Quadgrid!"<<std::endl;
         phythreadhandler=new PhysicsThreadDispatcher(G, collK, collDampening,masses,8);
         timer.tick();
         phythreadhandler->setPresent(easytime::getPresent());
-        phythreadhandler->dispatch();
+        phythreadhandler->dispatchQuadGrid();
     }
     
 }
@@ -500,6 +563,7 @@ void PhysicsHandler::calcSpringForces()
 	{
 		timer.tick(); //Ready timer
 
+        
 		GridHandler grid=GridHandler(0.6/masses[0].radius,masses.size());
 		for(size_t n=0;n<masses.size();n++)
 			grid.addPointMass(&masses.at(n));

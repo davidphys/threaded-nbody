@@ -19,9 +19,19 @@ struct PhysicsThreadData{
     int particleEndRange;
 };
 
+struct QuadGridFillerThreadData{
+    SDL_Thread *thread;
+    PhysicsThreadDispatcher *parent;
+};
+
+int quadGridFillerThreadFunction(void* data);
 int physicsThreadFunction(void* data);
+
 //This class should handle all of the needed multithreading.
 class PhysicsThreadDispatcher{
+
+
+
     double G;
     double collK;
     double collDampening;
@@ -31,12 +41,16 @@ class PhysicsThreadDispatcher{
     std::vector<PhysicsThreadData> threads;
     SDL_sem *threadsrunning;
 
+    QuadGridFillerThreadData quadgridthread;
+
     QuadNode *quad;
     GridHandler *grid;
 
     std::vector<PointMass> masses;
 
     int nthreads;
+
+    SDL_Thread *fillthread(); 
 
     void destructQuadGrid();
     void destructThreads();
@@ -47,7 +61,18 @@ class PhysicsThreadDispatcher{
     PhysicsThreadDispatcher(double G, double collK, double collDampening,const std::vector<PointMass>& masses,int nthreads);
     ~PhysicsThreadDispatcher();
 
+    /* Mode 0: quadgrids need filling.
+     * Mode 1: quadgrids currently updating.
+     * Mode 2: physics needs running.
+     * Mode 3: physics currently updating.
+     * Mode 4: physics done.
+     * */
+    int getMode();
+
+
+
     void dispatch();
+    void dispatchQuadGrid();
 
     TimeType getPresent();
     void setPresent(TimeType t);
@@ -59,6 +84,7 @@ class PhysicsThreadDispatcher{
     const std::vector<PointMass>& getMasses();
 
     friend int physicsThreadFunction(void *data);
+    friend int quadGridFillerThreadFunction(void *data);
 };
 
 class PhysicsHandlerThreaded{
