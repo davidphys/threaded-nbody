@@ -1,4 +1,3 @@
-
 #ifndef PHYSTRUCTS_H
 #define PHYSTRUCTS_H
 #include "glm/glm.hpp"
