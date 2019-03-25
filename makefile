@@ -1,6 +1,6 @@
 PROJECT=program #executable file name
 CC=g++
-CFLAGS= -Wall -std=c++11
+CFLAGS= -Wall -std=c++11 
 DEBUGFLAGS= -g
 RELEASEFLAGS= -O3
 LIBS= -lSDL2 -lSDL2_image

@@ -23,6 +23,6 @@ public:
     void setCursorParticleRadius(double pR);
     void setCursorParticleMass(double pR);
     void placeBall(int N,double rmult=1, double angvel=0);
-    void placeGaussian(int N, double sdev, double rot1=0, double rot2=0);
+    void placeGaussian(int N, double sdev, double rot1=1000, double rot2=0);
 };
 #endif //PARTICLEMAN_H

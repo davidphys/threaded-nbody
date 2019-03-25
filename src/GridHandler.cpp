@@ -46,7 +46,7 @@ void GridHandler::calculateForces(PointMass *arg, const double& K, const double&
 			if(f!=gridmap->end()){
 				//if there's a vector, iterate over it and calculate each resulting force.
 				for(size_t i=0; i<f->second.size(); i++) {
-					PointMass *val=f->second.at(i);
+					PointMass *val=f->second[i];
 
 					glm::dvec2 diff=val->position-arg->position;
 					double d=diff.x*diff.x+diff.y*diff.y;

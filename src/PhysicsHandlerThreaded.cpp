@@ -52,7 +52,7 @@ void PhysicsThreadDispatcher::fillGrid(){
     for(int i=0;i<masses.size();i++)
         if(masses[i].radius>maxrad)
             maxrad=masses[i].radius;
-    grid=new GridHandler(0.6/maxrad,masses.size());
+    grid=new GridHandler(0.706/maxrad,masses.size());
 }
 
 void PhysicsThreadDispatcher::fillQuad(){
@@ -314,12 +314,16 @@ void PhysicsHandlerThreaded::update(double timestep){
     //If the computation has finished but the thread handler has not been cleaned up yet,
     //clean up/finish the computation.
     if(phythreadhandler!=nullptr && phythreadhandler->getMode()==2){
+        EasyTimer timer2;
         timer.tick();
         phythreadhandler->setPresent(easytime::getPresent());
         phythreadhandler->dispatch();
+        std::cout<<"Dispatching Threads timing: "<<timer2.tick()<<std::endl;
     } else if(phythreadhandler!=nullptr){
+        EasyTimer timer3;
+        timer3.tick();
 
-        std::cout<<"Finish Computation timing: "<<std::endl;
+        //std::cout<<"Finish Computation timing: "<<std::endl;
         EasyTimer timer2;//timer2
         timer2.tick();//timer2
 
@@ -330,12 +334,12 @@ void PhysicsHandlerThreaded::update(double timestep){
         for(size_t i=0;i<threadtimes.size();i++){
             timingsum+=threadtimes[i];
         }
-        std::cout<<"\tTotal Thread time: "<<timingsum<<std::endl;
+        //std::cout<<"\tTotal Thread time: "<<timingsum<<std::endl;
 
 
 
         delete phythreadhandler;
-        std::cout<<"\tThread Dispatcher Deletion: "<<timer2.tick()<<std::endl; //timer2
+        //std::cout<<"\tThread Dispatcher Deletion: "<<timer2.tick()<<std::endl; //timer2
         phythreadhandler=nullptr;
         phytime.realTime=timer.tick(); //timer shouldn't have ticked since the update called when phythreadhandler was created.
         
@@ -348,20 +352,25 @@ void PhysicsHandlerThreaded::update(double timestep){
             m.position+=(m.velocity+.5*timestep*(m.springforce+m.gravforce)/m.mass)*timestep;
             m.velocity+=timestep*(m.springforce+m.gravforce)/m.mass;
         }
-        int dist=10000;
+        int dist=10000000;
 
+        /*
         for(size_t n=0;n<masses.size();n++){
             PointMass &m=masses.at(n);
             if(m.position.x*m.position.x+m.position.y*m.position.y>dist*dist)
             {    masses.erase(masses.begin()+n);
             n--;}
 
-        }
+        }*/
         phytime.timestepping=timer.tick();
-        std::cout<<"\tparticle integration: "<<timer2.tick()<<std::endl; //timer2
+        //std::cout<<"\tparticle integration: "<<timer2.tick()<<std::endl; //timer2
+        std::cout<<"Finish Computation Timing: "<<timer3.tick()<<std::endl;
     } else { //In this case, we need to start a new computation.
-        std::cout<<"Dispatching Quadgrid!"<<std::endl;
+        EasyTimer timer3;
+        timer3.tick();
+
         phythreadhandler=new PhysicsThreadDispatcher(G, collK, collDampening,masses,8);
+        std::cout<<"Quadgrid Dispatch Timing: "<<timer3.tick()<<std::endl;
         timer.tick();
         phythreadhandler->setPresent(easytime::getPresent());
         phythreadhandler->dispatchQuadGrid();

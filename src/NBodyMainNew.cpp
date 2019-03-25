@@ -28,7 +28,7 @@ std::string filename(std::string prefix, int num, std::string suffix){
 int main(int argc, char** argv)
 {
     int nmult=3;
-    PhysicsHandlerThreaded phy(2*nmult,600,10);
+    PhysicsHandlerThreaded phy(2*nmult,1000,10);
     TimeType start,end;
     start=std::chrono::system_clock::now();
     end=std::chrono::system_clock::now();
@@ -38,17 +38,21 @@ int main(int argc, char** argv)
     ParticleManager man;
     
     man.setCursorParticleMass(20);
+    man.placeGaussian(100,100,2.8,0.0000002);
+
+
     man.setCursorPosition(-1000,0);
     man.setCursorVelocity(20,0);
-    man.placeBall(100,1,0.01);
-    man.setCursorVelocity(0,0);
+    man.setCursorParticleMass(10);
+    man.placeBall(1600,0.7,0.02);
+    man.setCursorParticleMass(20);
+    man.setCursorVelocity(3,0);
     man.setCursorPosition(-1000,180);
     man.placeBall(100,1,0.0);
     man.setCursorPosition(4000,0);
     man.setCursorVelocity(-100,0);
     man.placeBall(500,1,-0.01);
 
-    man.load("particles.txt");
 
     phy.replaceMassList(man.masses);
 
@@ -72,6 +76,7 @@ int main(int argc, char** argv)
     double a0=phy.getAngularMomentum();
     while(sLoop())
     {
+        for(int i=0;i<200;i++)
         phy.update(0.01);
         initDrawStyleCCircles();
         double mult=cam.getScale();

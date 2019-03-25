@@ -9,7 +9,7 @@ void QuadNode::calculateForces(PointMass *arg, const double& G) const
 		glm::dvec2 diff=pt-arg->position;
 		double d=diff.x*diff.x+diff.y*diff.y;
 		register double diffw=(tl.x-br.x);
-		if (diffw*diffw >= d*.7) 
+		if (diffw*diffw >= d*0.8) 
 		{
 			for (int n = 0; n<2; n++)
 				for (int m = 0; m<2; m++)
